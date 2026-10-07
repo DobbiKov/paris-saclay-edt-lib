@@ -1,0 +1,16 @@
+[project]
+name = "saclay-edt"
+version = "0.1.0"
+description = "Client for the Université Paris-Saclay Celcat timetable (edt.universite-paris-saclay.fr)"
+requires-python = ">=3.10"
+dependencies = ["requests>=2.31"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["saclay_edt"]
+
+[tool.setuptools.package-data]
+saclay_edt = ["static/*.html"]
