@@ -39,6 +39,18 @@ def _read_dotenv(path: Path) -> dict[str, str]:
     return out
 
 
+def credentials_from_env(dotenv: Path | str = ".env") -> tuple[str, str] | None:
+    """(username, password) from SACLAY_USERNAME / SACLAY_PASSWORD (environment first, then `dotenv`), or None.
+
+    Never prompts, so it is safe to use from servers; pass it as `CelcatClient(credentials=...)` after
+    wrapping it to raise when it returns None.
+    """
+    env = _read_dotenv(Path(dotenv))
+    user = os.environ.get("SACLAY_USERNAME") or env.get("SACLAY_USERNAME")
+    pwd = os.environ.get("SACLAY_PASSWORD") or env.get("SACLAY_PASSWORD")
+    return (user, pwd) if user and pwd else None
+
+
 @dataclass
 class Resource:
     id: str  # federationId, e.g. "L3 CHI Chimie [O3XCHI-910]"
@@ -110,12 +122,7 @@ class CelcatClient:
     @staticmethod
     def _prompt() -> tuple[str, str]:
         """SACLAY_USERNAME / SACLAY_PASSWORD from the environment or a local .env file, else ask."""
-        env = _read_dotenv(Path(".env"))
-        user = os.environ.get("SACLAY_USERNAME") or env.get("SACLAY_USERNAME")
-        pwd = os.environ.get("SACLAY_PASSWORD") or env.get("SACLAY_PASSWORD")
-        if user and pwd:
-            return user, pwd
-        return input("Paris-Saclay login: "), getpass.getpass("Password: ")
+        return credentials_from_env() or (input("Paris-Saclay login: "), getpass.getpass("Password: "))
 
     # -- auth -------------------------------------------------------------------------------
     def is_authenticated(self) -> bool:

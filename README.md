@@ -1,7 +1,11 @@
 # saclay-edt
 
 Python client for the Université Paris-Saclay timetables (<https://edt.universite-paris-saclay.fr>,
-a CELCAT Calendar deployment). Search groups/courses and fetch timetables with plain HTTP — no browser.
+a CELCAT Calendar deployment): login and the Celcat JSON endpoints, nothing more. It has no cache, database or server
+and depends only on `requests`; a test (`tests/test_boundaries.py`) keeps it that way.
+
+Caching, the API, the web page and the Telegram bot are a separate project, `saclay-timetable-app` (a sibling directory),
+that uses this library like any other user would.
 
 ```python
 from datetime import date, timedelta
@@ -18,20 +22,11 @@ for e in c.get_timetable(group, today, today + timedelta(days=7), details=True):
 print(c.get_courses(group, today, today + timedelta(days=120)))   # {code: name}
 ```
 
-## Web UI
+`python3 example.py` runs this once (and is the way to log in the first time). Every call goes straight to Celcat:
+if you call it often, put a cache in front (`saclay-timetable-app` does).
 
-```bash
-python3 example.py            # once: logs in (prompt, or credentials from .env, see "Credentials") and saves .session.json
-python3 -m saclay_edt.web     # then open http://127.0.0.1:8000  (--port N to change)
-```
-
-Pick a faculty, search a group, browse week by week; click a session for room, teacher, groups and notes.
-"Only sessions naming this group" keeps sessions that list the selected group itself (useful on a parent group such as
-`L3 CHI Chimie`; at the IUTs sessions are listed under the parent, so leave it off there).
-Your choices (faculty, one group per faculty, the filter) are remembered in `.prefs.json` (gitignored), so they survive
-restarts, other ports and other browsers. Emptying the group box forgets that faculty's group.
-The server listens on localhost only, reuses the saved cookies and never prompts: when the session expires it answers 401
-and you log in again from a terminal.
+Public API (`from saclay_edt import ...`): `CelcatClient`, `Event`, `Resource`, `login`, `credentials_from_env`,
+`AuthError`, `ApiError`, `ENTITIES`, and the resource types `GROUP`, `MODULE`, `ROOM`, `STAFF`, `STUDENT`.
 
 ## Tests
 
@@ -39,7 +34,7 @@ and you log in again from a terminal.
 python3 -m pytest tests
 ```
 
-Offline only (fake HTTP sessions with synthetic data): auth flow, client parsing/pagination/re-login, and the web API.
+Offline only (fake HTTP sessions with synthetic data): auth flow, client parsing/pagination/re-login, package boundaries.
 
 ## Authentication
 
@@ -71,11 +66,12 @@ SACLAY_PASSWORD=your_password
 - Real environment variables take precedence over `.env`, so `SACLAY_PASSWORD=... python3 example.py` also works.
 - The file is only read when a new password login is actually needed (the CAS cookie is tried first), and it is the
   only place the password is ever stored. `.env` is gitignored; also run `chmod 600 .env`, since it is plain text.
-- The web UI (`python3 -m saclay_edt.web`) never prompts. Without a `.env` it answers 401 when the session expires and
-  you re-login from a terminal; with a `.env` it renews the session by itself.
+- `credentials_from_env()` returns `(user, password)` or `None` and never prompts, so non-interactive programs
+  (like the API server in `saclay-timetable-app`) can use it as their `credentials=` callback.
 - Only provide credentials in a `.env` you control, on a machine you trust. They are sent solely to the university CAS.
 
-An expired Celcat session shows up as an **HTTP 200 with an empty body** on the JSON endpoints.
+An expired Celcat session shows up as an **HTTP 200 with an empty body** on the JSON endpoints; the client detects that
+and re-authenticates. Other HTTP errors raise `ApiError` and do not trigger a login.
 
 ## Endpoints (under `/Calendar_<ENTITY>/`)
 
@@ -93,3 +89,4 @@ Staff/student searches return an empty body for student accounts (not allowed). 
 
 - A parent group (e.g. `L3 CHI Chimie [O3XCHI-910]`) returns the events of its sub-groups too; filter with `group in e.groups` after `details=True`.
 - The order of `Event.details` differs between entities; use the named fields (`rooms`, `groups`, `staff`, `module_names`).
+- `details=True` costs one extra Celcat request per event.
